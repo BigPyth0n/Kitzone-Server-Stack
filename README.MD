@@ -38,7 +38,7 @@
 ## 📦 راهنمای نصب قدم‌به‌قدم
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/your-username/kitzone-server-setup/main/main.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/BigPyth0n/Kitzone-Server-Stack/refs/heads/main/main.sh)
 ```
 🔐 در حین اجرا، از شما پسورد PostgreSQL و Code-Server درخواست می‌شود. رمزها به صورت امن در `/root/postgres-credentials.txt` ذخیره می‌شوند.
 
