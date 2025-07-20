@@ -34,16 +34,14 @@
 
 ---
 
+
 ## 📦 راهنمای نصب قدم‌به‌قدم
 
 ```bash
-# 1. دریافت فایل
-git clone https://github.com/your-repo/kitzone-server-setup.git
-cd kitzone-server-setup
-
-# 2. اجرای اسکریپت با دسترسی root
-sudo bash main.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/your-username/kitzone-server-setup/main/main.sh)
 ```
+🔐 در حین اجرا، از شما پسورد PostgreSQL و Code-Server درخواست می‌شود. رمزها به صورت امن در `/root/postgres-credentials.txt` ذخیره می‌شوند.
+
 
 🟡 در حین اجرا، از شما پسورد PostgreSQL و Code-Server درخواست می‌شود. رمزها به صورت امن در `/root/postgres-credentials.txt` ذخیره می‌شوند.
 
@@ -140,4 +138,3 @@ docker pull postgres:15-alpine
 
 > هر سوال یا پیشنهادی دارید، Issue یا Pull Request بسازید 🙌  
 > برای مشارکت، لطفاً فایل `CONTRIBUTING.md` را مطالعه کنید.
-
