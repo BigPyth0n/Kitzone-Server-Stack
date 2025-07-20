@@ -41,10 +41,6 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/BigPyth0n/Kitzone-Server-Stack/refs/heads/main/main.sh)
 ```
 🔐 در حین اجرا، از شما پسورد PostgreSQL و Code-Server درخواست می‌شود. رمزها به صورت امن در `/root/postgres-credentials.txt` ذخیره می‌شوند.
-
-
-🟡 در حین اجرا، از شما پسورد PostgreSQL و Code-Server درخواست می‌شود. رمزها به صورت امن در `/root/postgres-credentials.txt` ذخیره می‌شوند.
-
 ---
 
 ## 🔐 پیکربندی کامل SSL در Nginx Proxy Manager
