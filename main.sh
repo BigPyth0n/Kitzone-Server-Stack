@@ -38,28 +38,9 @@ install_prerequisites() {
     log_info "Installing prerequisites and essential tools..."
     apt-get update -y
     apt-get install -y \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        gnupg \
-        lsb-release \
-        unzip \
-        git \
-        python3-pip \
-        nano \
-        tmux \
-        tree \
-        htop \
-        ncdu \
-        jq \
-        lsof \
-        neofetch \
-        zip \
-        unzip \
-        rsync \
-        net-tools \
-        software-properties-common \
-        bash-completion
+        apt-transport-https ca-certificates curl gnupg lsb-release unzip git \
+        python3-pip nano tmux tree htop ncdu jq lsof neofetch zip rsync \
+        net-tools software-properties-common bash-completion
     log_success "All essential packages installed."
 }
 
@@ -108,7 +89,7 @@ get_code_server_password() {
 }
 
 install_code_server() {
-    log_info "Deploying Code-Server with limited access to /root/codezone..."
+    log_info "Deploying Code-Server with limited access..."
     get_code_server_password
     mkdir -p /root/codezone
     chmod 700 /root/codezone
@@ -119,9 +100,8 @@ install_code_server() {
       -u root \
       -v /root/codezone:/home/coder/projects \
       linuxserver/code-server:latest
-    log_success "Code-Server deployed with limited directory access."
+    log_success "Code-Server deployed with restricted access."
 }
-
 
 get_postgres_credentials() {
     if [ -z "$POSTGRES_PASSWORD" ]; then
@@ -152,20 +132,21 @@ install_postgres() {
       -p 5432:5432 \
       postgres:15-alpine \
       -c 'listen_addresses=*'
-    log_success "PostgreSQL deployed with external access enabled."
-    echo "POSTGRES_HOST=$(hostname -I | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}')" > /root/postgres-credentials.txt
-    echo "POSTGRES_PORT=5432" >> /root/postgres-credentials.txt
-    echo "POSTGRES_DB=$POSTGRES_DB" >> /root/postgres-credentials.txt
-    echo "POSTGRES_USER=$POSTGRES_USER" >> /root/postgres-credentials.txt
-    echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> /root/postgres-credentials.txt
+    log_success "PostgreSQL deployed."
+    {
+        echo "POSTGRES_HOST=$(hostname -I | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}')"
+        echo "POSTGRES_PORT=5432"
+        echo "POSTGRES_DB=$POSTGRES_DB"
+        echo "POSTGRES_USER=$POSTGRES_USER"
+        echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+    } > /root/postgres-credentials.txt
     chmod 600 /root/postgres-credentials.txt
 }
 
 install_metabase() {
-    log_info "Deploying Metabase (Business Intelligence)..."
+    log_info "Deploying Metabase..."
     mkdir -p /opt/metabase/data
     chmod 700 /opt/metabase/data
-    METABASE_PASSWORD=$(date +%s | sha256sum | base64 | head -c 16)
     docker run -d --name=metabase --network=kitzone-net --restart=unless-stopped \
       -p 3000:3000 \
       -e MB_DB_TYPE=postgres \
@@ -176,22 +157,22 @@ install_metabase() {
       -e MB_DB_HOST=postgres \
       -v /opt/metabase/data:/metabase-data \
       metabase/metabase:latest
-    log_success "Metabase deployed and connected to PostgreSQL."
+    log_success "Metabase deployed."
 }
 
 install_grafana() {
-    log_info "Deploying Grafana (Monitoring & Analytics)..."
+    log_info "Deploying Grafana..."
     GRAFANA_PASSWORD=$(date +%s | sha256sum | base64 | head -c 16)
     docker run -d --name=grafana --network=kitzone-net --restart=unless-stopped \
       -p 3001:3000 \
       -e GF_SECURITY_ADMIN_PASSWORD=$GRAFANA_PASSWORD \
       -v /opt/grafana/data:/var/lib/grafana \
       grafana/grafana:latest
-    log_success "Grafana deployed with auto-generated password."
+    log_success "Grafana deployed."
 }
 
 install_pgadmin() {
-    log_info "Deploying pgAdmin (PostgreSQL Administration)..."
+    log_info "Deploying pgAdmin..."
     PGADMIN_PASSWORD=$(date +%s | sha256sum | base64 | head -c 16)
     docker run -d --name=pgadmin --network=kitzone-net --restart=unless-stopped \
       -p 5050:80 \
@@ -199,7 +180,7 @@ install_pgadmin() {
       -e PGADMIN_DEFAULT_PASSWORD=$PGADMIN_PASSWORD \
       -v /opt/pgadmin/data:/var/lib/pgadmin \
       dpage/pgadmin4:latest
-    log_success "pgAdmin deployed with auto-generated credentials."
+    log_success "pgAdmin deployed."
 }
 
 install_npm() {
@@ -211,7 +192,7 @@ install_npm() {
       -v npm-data:/data \
       -v /opt/npm/letsencrypt:/etc/letsencrypt \
       jc21/nginx-proxy-manager:latest
-    log_success "Nginx Proxy Manager deployed."
+    log_success "NPM deployed."
 }
 
 install_portainer() {
@@ -226,7 +207,7 @@ install_portainer() {
 }
 
 configure_firewall() {
-    log_info "Configuring firewall for external access..."
+    log_info "Configuring firewall..."
     ufw allow 80/tcp
     ufw allow 443/tcp
     ufw allow 5432/tcp
@@ -238,7 +219,7 @@ configure_firewall() {
     ufw allow 81/tcp
     ufw --force enable
     ufw reload
-    log_success "Firewall configured with required ports open."
+    log_success "Firewall configured."
 }
 
 final_summary() {
@@ -248,24 +229,23 @@ final_summary() {
     {
     echo "==================== KITZONE SERVER SUMMARY ===================="
     echo ""
-    echo "PostgreSQL Database:"
+    echo "PostgreSQL:"
     echo "  Host: $IP"
-    echo "  Port: 5432"
-    echo "  Database: $POSTGRES_DB"
+    echo "  DB: $POSTGRES_DB"
     echo "  User: $POSTGRES_USER"
-    echo "  Password: $POSTGRES_PASSWORD"
+    echo "  Pass: $POSTGRES_PASSWORD"
     echo ""
     echo "Metabase:     http://$IP:3000"
-    echo "Grafana:      http://$IP:3001  | admin / $GRAFANA_PASSWORD"
-    echo "pgAdmin:      http://$IP:5050  | admin@kitzone.online / $PGADMIN_PASSWORD"
-    echo "Code-Server:  https://$IP:8443 | root / $CODE_SERVER_PASSWORD"
+    echo "Grafana:      http://$IP:3001"
+    echo "pgAdmin:      http://$IP:5050"
+    echo "Code-Server:  https://$IP:8443"
     echo "Portainer:    http://$IP:9000"
-    echo "Nginx Proxy Manager: http://$IP:81 | admin@example.com / changeme"
+    echo "NPM:          http://$IP:81"
     echo ""
     echo "==============================================================="
     } > "$OUTPUT"
 
-    log_success "Deployment summary saved to: $OUTPUT"
+    log_success "Summary saved to $OUTPUT"
     cat "$OUTPUT"
 }
 
