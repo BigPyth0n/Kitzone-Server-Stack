@@ -108,19 +108,20 @@ get_code_server_password() {
 }
 
 install_code_server() {
-    log_info "Deploying Code-Server with ROOT access..."
+    log_info "Deploying Code-Server with limited access to /root/codezone..."
     get_code_server_password
-    mkdir -p ~/projects
+    mkdir -p /root/codezone
+    chmod 700 /root/codezone
     docker run -d --name=code-server --network=kitzone-net --restart=unless-stopped \
       -p 8443:8443 \
       -e PASSWORD="$CODE_SERVER_PASSWORD" \
       -e TZ=Asia/Tehran \
       -u root \
-      -v /:/host_root \
-      -v ~/projects:/home/coder/projects \
+      -v /root/codezone:/home/coder/projects \
       linuxserver/code-server:latest
-    log_success "Code-Server deployed with root privileges."
+    log_success "Code-Server deployed with limited directory access."
 }
+
 
 get_postgres_credentials() {
     if [ -z "$POSTGRES_PASSWORD" ]; then
