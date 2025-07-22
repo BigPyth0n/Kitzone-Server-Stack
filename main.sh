@@ -13,10 +13,10 @@ print_banner() {
 cat << "EOF"
 
  ╔════════════════════════════════════════════════════╗
- ║         🚀 KITZONE SERVER SETUP v4.5 🚀           ║
+ ║         🚀 KITZONE SERVER SETUP v4.2 🚀           ║
  ╠════════════════════════════════════════════════════╣
  ║ PostgreSQL • Metabase • pgAdmin • Code-Server     ║
- ║ File Browser • Nginx Proxy Manager • Netdata • 🔒 ║
+ ║ Nginx Proxy Manager • Netdata • 🔒                 ║
  ╚════════════════════════════════════════════════════╝
 
 EOF
@@ -29,8 +29,6 @@ prompt_inputs() {
   read -p "📛 PostgreSQL database name: " PG_DB
   read -p "📧 pgAdmin email: " PGADMIN_EMAIL
   read -p "🔐 pgAdmin password: " PGADMIN_PASS
-  read -p "👤 File Browser username: " FB_USER
-  read -p "🔐 File Browser password: " FB_PASS
 }
 
 fix_hostname() {
@@ -100,26 +98,6 @@ deploy_code_server() {
   success "Code-Server ready"
 }
 
-deploy_file_browser() {
-  log "Deploying File Browser..."
-  docker run -d --name=filebrowser --network=kitzone-net \
-    -p 8080:80 \
-    -v /:/srv \
-    -e PUID=0 -e PGID=0 \
-    filebrowser/filebrowser:latest || {
-      warn "File Browser container failed to start, retrying setup step..."
-      return 0
-  }
-
-  # Wait and add user
-  sleep 3
-  if docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin; then
-    success "File Browser ready"
-  else
-    warn "⚠ File Browser user creation failed, please add manually later via UI."
-  fi
-}
-
 deploy_netdata() {
   log "Deploying Netdata..."
   docker run -d --name=netdata \
@@ -170,11 +148,6 @@ URL: http://<IP>:5050
 Email: $PGADMIN_EMAIL
 Password: $PGADMIN_PASS
 
-📁 File Browser
-URL: http://<IP>:8080
-Username: $FB_USER
-Password: $FB_PASS
-
 🌐 Nginx Proxy Manager
 URL: http://<IP>:81
 Email: admin@example.com
@@ -195,7 +168,6 @@ main() {
   deploy_metabase
   deploy_pgadmin
   deploy_code_server
-  deploy_file_browser
   deploy_netdata
   deploy_npm
   save_credentials
