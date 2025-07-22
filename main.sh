@@ -13,7 +13,7 @@ print_banner() {
 cat << "EOF"
 
  ╔════════════════════════════════════════════════════╗
- ║         🚀 KITZONE SERVER SETUP v4.3 🚀           ║
+ ║         🚀 KITZONE SERVER SETUP v4.4 🚀           ║
  ╠════════════════════════════════════════════════════╣
  ║ PostgreSQL • Metabase • pgAdmin • Code-Server     ║
  ║ File Browser • Nginx Proxy Manager • Netdata • 🔒 ║
@@ -109,12 +109,12 @@ deploy_file_browser() {
     filebrowser/filebrowser:latest
 
   log "⏳ Waiting for File Browser to initialize..."
-  sleep 5
+  sleep 5  # Give time to initialize database
 
-  # Try adding user only after container is ready
+  # Try to initialize config and create admin user safely
   docker exec filebrowser filebrowser config init --database /database.db || true
-  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin || warn "User already exists or failed"
-
+  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin || warn "User creation skipped (possibly exists)"
+  
   success "File Browser ready"
 }
 
