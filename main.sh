@@ -13,7 +13,7 @@ print_banner() {
 cat << "EOF"
 
  ╔════════════════════════════════════════════════════╗
- ║         🚀 KITZONE SERVER SETUP v4.4 🚀           ║
+ ║         🚀 KITZONE SERVER SETUP v4.5 🚀           ║
  ╠════════════════════════════════════════════════════╣
  ║ PostgreSQL • Metabase • pgAdmin • Code-Server     ║
  ║ File Browser • Nginx Proxy Manager • Netdata • 🔒 ║
@@ -106,18 +106,19 @@ deploy_file_browser() {
     -p 8080:80 \
     -v /:/srv \
     -e PUID=0 -e PGID=0 \
-    filebrowser/filebrowser:latest
+    filebrowser/filebrowser:latest || {
+      warn "File Browser container failed to start, retrying setup step..."
+      return 0
+  }
 
-  log "⏳ Waiting for File Browser to initialize..."
-  sleep 5  # Give time to initialize database
-
-  # Try to initialize config and create admin user safely
-  docker exec filebrowser filebrowser config init --database /database.db || true
-  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin || warn "User creation skipped (possibly exists)"
-  
-  success "File Browser ready"
+  # Wait and add user
+  sleep 3
+  if docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin; then
+    success "File Browser ready"
+  else
+    warn "⚠ File Browser user creation failed, please add manually later via UI."
+  fi
 }
-
 
 deploy_netdata() {
   log "Deploying Netdata..."
