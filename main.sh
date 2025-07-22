@@ -19,9 +19,9 @@ print_banner() {
 cat << "EOF"
 
   ╔════════════════════════════════════════════════════╗
-  ║         🚀 KITZONE SERVER SETUP v2.0 🚀           ║
+  ║         🚀 KITZONE SERVER SETUP v3.0 🚀           ║
   ╠════════════════════════════════════════════════════╣
-  ║  PostgreSQL • Metabase • Grafana • pgAdmin • NPM   ║
+  ║     PostgreSQL • Metabase • pgAdmin • Netdata     ║
   ╚════════════════════════════════════════════════════╝
 
 EOF
@@ -35,45 +35,43 @@ fix_hostname_resolution() {
 }
 
 install_prerequisites() {
-    log_info "Installing prerequisites and essential tools..."
+    log_info "Installing prerequisites..."
     apt-get update -y
     apt-get install -y \
-        apt-transport-https ca-certificates curl gnupg lsb-release unzip git \
-        python3-pip nano tmux tree htop ncdu jq lsof neofetch zip rsync \
+        curl gnupg lsb-release unzip git nano htop ncdu jq lsof neofetch zip rsync \
         net-tools software-properties-common bash-completion
-    log_success "All essential packages installed."
+    log_success "Base packages installed."
 }
 
 install_docker() {
     if command -v docker &> /dev/null; then
-        log_success "Docker is already installed."
+        log_success "Docker already installed."
         return
     fi
     log_info "Installing Docker..."
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
     apt-get update -y
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable docker && systemctl start docker
-    log_success "Docker installed and running."
+    log_success "Docker installed."
 }
 
 cleanup_docker() {
-    log_warning "Performing full Docker cleanup..."
+    log_warning "Cleaning up Docker..."
     docker stop $(docker ps -q) 2>/dev/null || true
     docker rm -f $(docker ps -aq) 2>/dev/null || true
     docker rmi -f $(docker images -q) 2>/dev/null || true
     docker volume rm $(docker volume ls -q) 2>/dev/null || true
     docker network prune -f >/dev/null || true
-    log_success "Docker cleanup complete."
+    log_success "Docker cleanup done."
 }
 
 create_docker_network() {
-    log_info "Creating Docker network 'kitzone-net'..."
     docker network create kitzone-net >/dev/null || true
-    log_success "Docker network 'kitzone-net' created or already exists."
+    log_success "Docker network 'kitzone-net' created."
 }
 
 get_code_server_password() {
@@ -89,23 +87,23 @@ get_code_server_password() {
 }
 
 install_code_server() {
-    log_info "Deploying Code-Server with limited access..."
+    log_info "Deploying Code-Server..."
     get_code_server_password
     mkdir -p /root/codezone
     chmod 700 /root/codezone
     docker run -d --name=code-server --network=kitzone-net --restart=unless-stopped \
-      -p 8443:8443 \
-      -e PASSWORD="$CODE_SERVER_PASSWORD" \
-      -e TZ=Asia/Tehran \
-      -u root \
-      -v /root/codezone:/home/coder/projects \
-      linuxserver/code-server:latest
-    log_success "Code-Server deployed with restricted access."
+        -p 8443:8443 \
+        -e PASSWORD="$CODE_SERVER_PASSWORD" \
+        -e TZ=Asia/Tehran \
+        -u root \
+        -v /root/codezone:/home/coder/projects \
+        linuxserver/code-server:latest
+    log_success "Code-Server ready."
 }
 
 get_postgres_credentials() {
     if [ -z "$POSTGRES_PASSWORD" ]; then
-        echo -e "${YELLOW}Set a password for PostgreSQL admin user:${NC}"
+        echo -e "${YELLOW}Set a password for PostgreSQL:${NC}"
         read -sp "Password: " POSTGRES_PASSWORD
         echo
         if [ -z "$POSTGRES_PASSWORD" ]; then
@@ -119,28 +117,28 @@ get_postgres_credentials() {
 }
 
 install_postgres() {
-    log_info "Deploying PostgreSQL database..."
+    log_info "Deploying PostgreSQL..."
     get_postgres_credentials
     mkdir -p /opt/postgres/data
     chmod 700 /opt/postgres/data
     docker run -d --name=postgres --network=kitzone-net --restart=unless-stopped \
-      -e POSTGRES_DB=$POSTGRES_DB \
-      -e POSTGRES_USER=$POSTGRES_USER \
-      -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
-      -e TZ=Asia/Tehran \
-      -v /opt/postgres/data:/var/lib/postgresql/data \
-      -p 5432:5432 \
-      postgres:15-alpine \
-      -c 'listen_addresses=*'
-    log_success "PostgreSQL deployed."
+        -e POSTGRES_DB=$POSTGRES_DB \
+        -e POSTGRES_USER=$POSTGRES_USER \
+        -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+        -e TZ=Asia/Tehran \
+        -v /opt/postgres/data:/var/lib/postgresql/data \
+        -p 5432:5432 \
+        postgres:15-alpine \
+        -c 'listen_addresses=*'
     {
-        echo "POSTGRES_HOST=$(hostname -I | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}')"
+        echo "POSTGRES_HOST=$(hostname -I | awk '{print $1}')"
         echo "POSTGRES_PORT=5432"
         echo "POSTGRES_DB=$POSTGRES_DB"
         echo "POSTGRES_USER=$POSTGRES_USER"
         echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
     } > /root/postgres-credentials.txt
     chmod 600 /root/postgres-credentials.txt
+    log_success "PostgreSQL ready."
 }
 
 install_metabase() {
@@ -148,84 +146,56 @@ install_metabase() {
     mkdir -p /opt/metabase/data
     chmod 700 /opt/metabase/data
     docker run -d --name=metabase --network=kitzone-net --restart=unless-stopped \
-      -p 3000:3000 \
-      -e MB_DB_TYPE=postgres \
-      -e MB_DB_DBNAME=$POSTGRES_DB \
-      -e MB_DB_PORT=5432 \
-      -e MB_DB_USER=$POSTGRES_USER \
-      -e MB_DB_PASS=$POSTGRES_PASSWORD \
-      -e MB_DB_HOST=postgres \
-      -v /opt/metabase/data:/metabase-data \
-      metabase/metabase:latest
-    log_success "Metabase deployed."
-}
-
-install_grafana() {
-    log_info "Deploying Grafana..."
-    GRAFANA_PASSWORD=$(date +%s | sha256sum | base64 | head -c 16)
-    docker run -d --name=grafana --network=kitzone-net --restart=unless-stopped \
-      -p 3001:3000 \
-      -e GF_SECURITY_ADMIN_PASSWORD=$GRAFANA_PASSWORD \
-      -v /opt/grafana/data:/var/lib/grafana \
-      grafana/grafana:latest
-    log_success "Grafana deployed."
+        -p 3000:3000 \
+        -e MB_DB_TYPE=postgres \
+        -e MB_DB_DBNAME=$POSTGRES_DB \
+        -e MB_DB_PORT=5432 \
+        -e MB_DB_USER=$POSTGRES_USER \
+        -e MB_DB_PASS=$POSTGRES_PASSWORD \
+        -e MB_DB_HOST=postgres \
+        -v /opt/metabase/data:/metabase-data \
+        metabase/metabase:latest
+    log_success "Metabase ready."
 }
 
 install_pgadmin() {
     log_info "Deploying pgAdmin..."
     PGADMIN_PASSWORD=$(date +%s | sha256sum | base64 | head -c 16)
     docker run -d --name=pgadmin --network=kitzone-net --restart=unless-stopped \
-      -p 5050:80 \
-      -e PGADMIN_DEFAULT_EMAIL=admin@kitzone.online \
-      -e PGADMIN_DEFAULT_PASSWORD=$PGADMIN_PASSWORD \
-      -v /opt/pgadmin/data:/var/lib/pgadmin \
-      dpage/pgadmin4:latest
-    log_success "pgAdmin deployed."
+        -p 5050:80 \
+        -e PGADMIN_DEFAULT_EMAIL=admin@kitzone.online \
+        -e PGADMIN_DEFAULT_PASSWORD=$PGADMIN_PASSWORD \
+        -v /opt/pgadmin/data:/var/lib/pgadmin \
+        dpage/pgadmin4:latest
+    log_success "pgAdmin ready."
 }
 
-install_npm() {
-    log_info "Deploying Nginx Proxy Manager..."
-    mkdir -p /opt/npm/letsencrypt
-    docker volume create npm-data >/dev/null || true
-    docker run -d --name=npm --network=kitzone-net --restart=unless-stopped \
-      -p 80:80 -p 81:81 -p 443:443 \
-      -v npm-data:/data \
-      -v /opt/npm/letsencrypt:/etc/letsencrypt \
-      jc21/nginx-proxy-manager:latest
-    log_success "NPM deployed."
-}
-
-install_portainer() {
-    log_info "Deploying Portainer..."
-    docker volume create portainer_data >/dev/null || true
-    docker run -d --name=portainer --network=kitzone-net --restart=unless-stopped \
-      -p 9000:9000 \
-      -v /var/run/docker.sock:/var/run/docker.sock \
-      -v portainer_data:/data \
-      portainer/portainer-ce:latest
-    log_success "Portainer deployed."
+install_netdata() {
+    log_info "Deploying Netdata (Monitor)..."
+    docker run -d --name=netdata --restart=unless-stopped \
+        -p 19999:19999 \
+        -v /etc/passwd:/host/etc/passwd:ro \
+        -v /etc/group:/host/etc/group:ro \
+        -v /proc:/host/proc:ro \
+        -v /sys:/host/sys:ro \
+        -v /etc/os-release:/host/etc/os-release:ro \
+        --cap-add=SYS_PTRACE \
+        --security-opt apparmor=unconfined \
+        netdata/netdata
+    log_success "Netdata running."
 }
 
 configure_firewall() {
     log_info "Configuring firewall..."
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-    ufw allow 5432/tcp
-    ufw allow 8443/tcp
-    ufw allow 3000/tcp
-    ufw allow 3001/tcp
-    ufw allow 5050/tcp
-    ufw allow 9000/tcp
-    ufw allow 81/tcp
+    ufw allow 80,443,5432,8443,3000,5050,19999/tcp
     ufw --force enable
     ufw reload
-    log_success "Firewall configured."
+    log_success "Firewall rules set."
 }
 
 final_summary() {
-    IP=$(hostname -I | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}')
+    IP=$(hostname -I | awk '{print $1}')
     OUTPUT="/root/kitzone-info.txt"
-
     {
     echo "==================== KITZONE SERVER SUMMARY ===================="
     echo ""
@@ -236,16 +206,13 @@ final_summary() {
     echo "  Pass: $POSTGRES_PASSWORD"
     echo ""
     echo "Metabase:     http://$IP:3000"
-    echo "Grafana:      http://$IP:3001"
     echo "pgAdmin:      http://$IP:5050"
     echo "Code-Server:  https://$IP:8443"
-    echo "Portainer:    http://$IP:9000"
-    echo "NPM:          http://$IP:81"
+    echo "Netdata:      http://$IP:19999"
     echo ""
     echo "==============================================================="
     } > "$OUTPUT"
-
-    log_success "Summary saved to $OUTPUT"
+    log_success "Info saved to $OUTPUT"
     cat "$OUTPUT"
 }
 
@@ -259,12 +226,9 @@ main() {
     install_code_server
     install_postgres
     install_metabase
-    install_grafana
     install_pgadmin
-    install_npm
-    install_portainer
+    install_netdata
     configure_firewall
-    docker restart portainer
     final_summary
 }
 
