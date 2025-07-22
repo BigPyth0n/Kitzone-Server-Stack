@@ -37,7 +37,7 @@
 ## 🧪 نصب سریع (دستور پیشنهادی)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/BigPyth0n/Kitzone-Server-Stack/main/kitzone-setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/BigPyth0n/Kitzone-Server-Stack/main/main.sh)
 ```
 
 در طول نصب، اسکریپت اطلاعاتی مانند رمزها و یوزرنیم‌ها را از شما دریافت کرده و به‌صورت امن در فایل زیر ذخیره می‌کند:
