@@ -13,22 +13,24 @@ print_banner() {
 cat << "EOF"
 
  ╔════════════════════════════════════════════════════╗
- ║         🚀 KITZONE SERVER SETUP v4.0 🚀           ║
+ ║         🚀 KITZONE SERVER SETUP v4.1 🚀           ║
  ╠════════════════════════════════════════════════════╣
- ║   PostgreSQL • Metabase • pgAdmin • Code-Server   ║
- ║ Nginx Proxy Manager • Portainer • Netdata Monitor ║
+ ║ PostgreSQL • Metabase • pgAdmin • Code-Server     ║
+ ║ File Browser • Nginx Proxy Manager • Netdata • 🔒 ║
  ╚════════════════════════════════════════════════════╝
 
 EOF
 }
 
 prompt_inputs() {
-  read -p "🔐 Enter Code-Server password: " CODE_PASS
-  read -p "🗃️  Enter PostgreSQL username (e.g. kitzone): " PG_USER
-  read -p "🔐 Enter PostgreSQL password: " PG_PASS
-  read -p "📛 Enter PostgreSQL database name: " PG_DB
-  read -p "📧 Enter pgAdmin email: " PGADMIN_EMAIL
-  read -p "🔐 Enter pgAdmin password: " PGADMIN_PASS
+  read -p "🔐 Code-Server password: " CODE_PASS
+  read -p "🗃️ PostgreSQL username (e.g. kitzone): " PG_USER
+  read -p "🔐 PostgreSQL password: " PG_PASS
+  read -p "📛 PostgreSQL database name: " PG_DB
+  read -p "📧 pgAdmin email: " PGADMIN_EMAIL
+  read -p "🔐 pgAdmin password: " PGADMIN_PASS
+  read -p "👤 File Browser username: " FB_USER
+  read -p "🔐 File Browser password: " FB_PASS
 }
 
 fix_hostname() {
@@ -88,15 +90,27 @@ deploy_pgadmin() {
 }
 
 deploy_code_server() {
-  log "Deploying Code-Server..."
-  mkdir -p /root/code-server-data
+  log "Deploying Code-Server with full / access..."
   docker run -d --name=code-server --network=kitzone-net \
     -p 8443:8443 \
     -e PASSWORD="$CODE_PASS" \
     -u root \
-    -v /root/code-server-data:/home/coder/project \
+    -v /:/home/coder/project \
     linuxserver/code-server
   success "Code-Server ready"
+}
+
+deploy_file_browser() {
+  log "Deploying File Browser..."
+  docker run -d --name=filebrowser --network=kitzone-net \
+    -p 8080:80 \
+    -v /:/srv \
+    -e PUID=0 -e PGID=0 \
+    filebrowser/filebrowser:latest
+
+  # Set credentials via exec
+  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin
+  success "File Browser ready"
 }
 
 deploy_netdata() {
@@ -117,4 +131,69 @@ deploy_npm() {
   mkdir -p /opt/npm/letsencrypt
   docker volume create npm-data >/dev/null || true
   docker run -d --name=npm --network=kitzone-net --restart=unless-stopped \
-    -p 80:80 -
+    -p 80:80 -p 81:81 -p 443:443 \
+    -v npm-data:/data \
+    -v /opt/npm/letsencrypt:/etc/letsencrypt \
+    jc21/nginx-proxy-manager:latest
+  success "Nginx Proxy Manager ready"
+}
+
+save_credentials() {
+  cat <<EOF > /root/kitzone-credentials.txt
+📋 KitZone Access Credentials
+------------------------------
+🌐 Host: $(curl -s ifconfig.me)
+
+🔧 Code-Server
+URL: http://<IP>:8443
+Password: $CODE_PASS
+
+🗃️ PostgreSQL
+Host: 127.0.0.1
+Port: 5432
+Username: $PG_USER
+Password: $PG_PASS
+Database: $PG_DB
+
+📊 Metabase
+URL: http://<IP>:3000
+
+🛠️ pgAdmin
+URL: http://<IP>:5050
+Email: $PGADMIN_EMAIL
+Password: $PGADMIN_PASS
+
+📁 File Browser
+URL: http://<IP>:8080
+Username: $FB_USER
+Password: $FB_PASS
+
+🌐 Nginx Proxy Manager
+URL: http://<IP>:81
+Email: admin@example.com
+Password: changeme
+
+Saved: $(date)
+EOF
+  success "Credentials saved to /root/kitzone-credentials.txt"
+}
+
+main() {
+  print_banner
+  prompt_inputs
+  fix_hostname
+  install_requirements
+  create_docker_network
+  deploy_postgres
+  deploy_metabase
+  deploy_pgadmin
+  deploy_code_server
+  deploy_file_browser
+  deploy_netdata
+  deploy_npm
+  save_credentials
+  echo -e "\n🎉 ${GREEN}All services deployed successfully!${NC}"
+  echo -e "🔐 See your credentials in: ${YELLOW}/root/kitzone-credentials.txt${NC}"
+}
+
+main
