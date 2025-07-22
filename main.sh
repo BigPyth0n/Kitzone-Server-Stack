@@ -108,10 +108,16 @@ deploy_file_browser() {
     -e PUID=0 -e PGID=0 \
     filebrowser/filebrowser:latest
 
-  # Set credentials via exec
-  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin
+  log "⏳ Waiting for File Browser to initialize..."
+  sleep 5
+
+  # Try adding user only after container is ready
+  docker exec filebrowser filebrowser config init --database /database.db || true
+  docker exec filebrowser filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin || warn "User already exists or failed"
+
   success "File Browser ready"
 }
+
 
 deploy_netdata() {
   log "Deploying Netdata..."
