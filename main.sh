@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 trap 'echo -e "\n\033[1;31m💥 Script failed at line $LINENO\033[0m\n"' ERR
@@ -12,10 +11,10 @@ print_banner() {
 cat << "EOF"
 
  ╔════════════════════════════════════════════════════╗
- ║         🚀 KITZONE SERVER SETUP v4.6 🚀           ║
+ ║         🚀 KITZONE SERVER SETUP v4.8 🚀           ║
  ╠════════════════════════════════════════════════════╣
- ║ PostgreSQL • Metabase • pgAdmin • Code-Server     ║
- ║ Portainer • Nginx Proxy Manager • Netdata • 🔒    ║
+ ║ Python 3.11 • PostgreSQL • Metabase • pgAdmin     ║
+ ║ Code-Server (Native) • Portainer • NPM            ║
  ╚════════════════════════════════════════════════════╝
 
 EOF
@@ -36,11 +35,38 @@ fix_hostname() {
 }
 
 install_requirements() {
-  log "Installing required packages..."
+  log "Installing required base packages..."
   apt-get update -qq
   apt-get install -y curl gnupg lsb-release unzip git nano zip ufw docker.io docker-compose -qq > /dev/null
   systemctl enable --now docker
   success "Base packages installed"
+}
+
+install_python_311() {
+  log "Installing Python 3.11..."
+  apt-get install -y software-properties-common -qq > /dev/null
+  add-apt-repository -y ppa:deadsnakes/ppa > /dev/null
+  apt-get update -qq
+  apt-get install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils -qq > /dev/null
+
+  update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+  update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3 1
+
+  success "Python 3.11 installed and set as default"
+}
+
+install_code_server_local() {
+  log "Installing Code-Server (native)..."
+  curl -fsSL https://code-server.dev/install.sh | sh
+  mkdir -p ~/.config/code-server
+  cat > ~/.config/code-server/config.yaml <<EOF
+bind-addr: 0.0.0.0:8443
+auth: password
+password: $CODE_PASS
+cert: false
+EOF
+  systemctl enable --now code-server@root
+  success "Code-Server installed on port 8443 (local)"
 }
 
 create_docker_network() {
@@ -51,46 +77,60 @@ create_docker_network() {
 deploy_postgres() {
   log "Deploying PostgreSQL..."
   mkdir -p /opt/postgres/data
-  docker run -d --name=postgres --network=kitzone-net     -e POSTGRES_USER="$PG_USER"     -e POSTGRES_PASSWORD="$PG_PASS"     -e POSTGRES_DB="$PG_DB"     -v /opt/postgres/data:/var/lib/postgresql/data     -p 5432:5432     postgres:15-alpine -c 'listen_addresses=*'
+  docker run -d --name=postgres --network=kitzone-net \
+    -e POSTGRES_USER="$PG_USER" \
+    -e POSTGRES_PASSWORD="$PG_PASS" \
+    -e POSTGRES_DB="$PG_DB" \
+    -v /opt/postgres/data:/var/lib/postgresql/data \
+    -p 5432:5432 \
+    postgres:15-alpine -c 'listen_addresses=*'
   success "PostgreSQL deployed"
 }
 
 deploy_metabase() {
   log "Deploying Metabase..."
-  docker run -d --name=metabase --network=kitzone-net     -p 3000:3000     -e MB_DB_TYPE=postgres     -e MB_DB_DBNAME="$PG_DB"     -e MB_DB_PORT=5432     -e MB_DB_USER="$PG_USER"     -e MB_DB_PASS="$PG_PASS"     -e MB_DB_HOST=postgres     metabase/metabase
+  docker run -d --name=metabase --network=kitzone-net \
+    -p 3000:3000 \
+    -e MB_DB_TYPE=postgres \
+    -e MB_DB_DBNAME="$PG_DB" \
+    -e MB_DB_PORT=5432 \
+    -e MB_DB_USER="$PG_USER" \
+    -e MB_DB_PASS="$PG_PASS" \
+    -e MB_DB_HOST=postgres \
+    metabase/metabase
   success "Metabase deployed"
 }
 
 deploy_pgadmin() {
   log "Deploying pgAdmin..."
-  docker run -d --name=pgadmin --network=kitzone-net     -p 5050:80     -e PGADMIN_DEFAULT_EMAIL="$PGADMIN_EMAIL"     -e PGADMIN_DEFAULT_PASSWORD="$PGADMIN_PASS"     dpage/pgadmin4
+  docker run -d --name=pgadmin --network=kitzone-net \
+    -p 5050:80 \
+    -e PGADMIN_DEFAULT_EMAIL="$PGADMIN_EMAIL" \
+    -e PGADMIN_DEFAULT_PASSWORD="$PGADMIN_PASS" \
+    dpage/pgadmin4
   success "pgAdmin deployed"
-}
-
-deploy_code_server() {
-  log "Deploying Code-Server with full root access..."
-  docker run -d --name=code-server --network=kitzone-net     -p 8443:8443     -e PASSWORD="$CODE_PASS"     -u root     -v /:/home/coder/project     linuxserver/code-server
-  success "Code-Server deployed"
-}
-
-deploy_netdata() {
-  log "Deploying Netdata..."
-  docker run -d --name=netdata     --network=host     --cap-add SYS_PTRACE     --security-opt apparmor=unconfined     -v /proc:/host/proc:ro     -v /sys:/host/sys:ro     -v /etc/os-release:/host/etc/os-release:ro     netdata/netdata
-  success "Netdata running"
 }
 
 deploy_npm() {
   log "Deploying Nginx Proxy Manager..."
   mkdir -p /opt/npm/letsencrypt
   docker volume create npm-data >/dev/null || true
-  docker run -d --name=npm --network=kitzone-net --restart=unless-stopped     -p 80:80 -p 81:81 -p 443:443     -v npm-data:/data     -v /opt/npm/letsencrypt:/etc/letsencrypt     jc21/nginx-proxy-manager:latest
+  docker run -d --name=npm --network=kitzone-net --restart=unless-stopped \
+    -p 80:80 -p 81:81 -p 443:443 \
+    -v npm-data:/data \
+    -v /opt/npm/letsencrypt:/etc/letsencrypt \
+    jc21/nginx-proxy-manager:latest
   success "Nginx Proxy Manager deployed"
 }
 
 deploy_portainer() {
   log "Deploying Portainer..."
   docker volume create portainer_data >/dev/null || true
-  docker run -d --name=portainer --restart=unless-stopped     -p 9443:9443     -p 9000:9000     -v /var/run/docker.sock:/var/run/docker.sock     -v portainer_data:/data     portainer/portainer-ce
+  docker run -d --name=portainer --restart=unless-stopped \
+    -p 9443:9443 -p 9000:9000 \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v portainer_data:/data \
+    portainer/portainer-ce
   success "Portainer ready"
 }
 
@@ -101,7 +141,7 @@ save_credentials() {
 ------------------------------
 🌐 Host: $PUBLIC_IP
 
-🔧 Code-Server
+🔧 Code-Server (Native)
 URL: http://$PUBLIC_IP:8443
 Password: $CODE_PASS
 
@@ -138,12 +178,12 @@ main() {
   prompt_inputs
   fix_hostname
   install_requirements
+  install_python_311
+  install_code_server_local
   create_docker_network
   deploy_postgres
   deploy_metabase
   deploy_pgadmin
-  deploy_code_server
-  deploy_netdata
   deploy_npm
   deploy_portainer
   save_credentials
